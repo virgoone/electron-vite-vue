@@ -47,6 +47,9 @@ jobs:
           tag: ${{ steps.get_version.outputs.version }}
           body: "${{ steps.tag.outputs.message }}"
   build:
+    needs: create-release
+    permissions:
+      contents: write
     runs-on: ${{ matrix.os }}
 
     strategy:
