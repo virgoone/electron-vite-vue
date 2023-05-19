@@ -15,6 +15,37 @@ on:
       - "!.github/workflows/build.yml"
 
 jobs:
+  create-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-20.04
+    outputs:
+      release_id: ${{ steps.create-release.outputs.id }}
+      release_upload_url: ${{ steps.create-release.outputs.upload_url }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get version
+        id: get_version
+        uses: battila7/get-version-action@v2
+
+      - name: Get tag message
+        id: tag
+        run: |
+          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$(git tag -l --format='%(contents)' ${{ steps.get_version.outputs.version }})" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create-release
+        uses: ncipollo/release-action@v1
+        with:
+          draft: true
+          name: ${{ steps.get_version.outputs.version }}
+          tag: ${{ steps.get_version.outputs.version }}
+          body: "${{ steps.tag.outputs.message }}"
   build:
     runs-on: ${{ matrix.os }}
 
@@ -45,3 +76,24 @@ jobs:
           name: release_on_${{ matrix. os }}
           path: release/
           retention-days: 5
+  publish-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-20.04
+    needs: [create-release, build]
+
+    steps:
+      - name: publish release
+        id: publish-release
+        uses: actions/github-script@v6
+        env:
+          release_id: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: process.env.release_id,
+              draft: false,
+              prerelease: false
+            })
